@@ -2,6 +2,7 @@ Revision stats
 ===
 
 This tool is intended to run on the [Wikimedia Toolserver](http://toolserver.org/). It computes statistics from the revision history of a page on Wikipedia:
+
 * Total revisions
 * Total minor revisions
 * First edit date
