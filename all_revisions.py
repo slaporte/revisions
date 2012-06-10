@@ -1,18 +1,15 @@
 from bottle import route, run, template, redirect, request
 from datetime import timedelta, datetime
-from twisted.python import log
 import os
 import oursql
 #import jsonp_bottle
-import sys
-log.startLogging(sys.stdout)
+
+# TODO: timestamp
+
 
 def parse_date_string(stamp):
     return datetime.strptime(stamp, '%Y%m%d%H%M%S')
 
-
-class HistoryError(Exception):
-    pass
 
 class ArticleHistory:
     '''article history object'''
@@ -24,19 +21,16 @@ class ArticleHistory:
             use_unicode=False)
         cursor = db.cursor(oursql.DictCursor)
         cursor.execute('''
-            SELECT      revision.rev_user_text, revision.rev_timestamp, revision.rev_user, revision.rev_minor_edit, revision.rev_len, revision.rev_deleted, revision.rev_comment, page.page_id, page.page_title
-            FROM        revision
+            SELECT 	revision.*
+	    FROM        revision
             INNER JOIN  page ON revision.rev_page = page.page_id
             WHERE       page_title = ? AND page.page_namespace = ?;
             ''', (title, namespace))
         self.revisions = cursor.fetchall()
-        try:
-            self.first_edit_date = parse_date_string(self.revisions[0]['rev_timestamp'])
-            self.age = datetime.now() - self.first_edit_date
-            self.most_recent_edit_date = parse_date_string(self.revisions[-1]['rev_timestamp'])
-            self.most_recent_edit_age = datetime.now() - self.most_recent_edit_date
-        except IndexError:
-            raise HistoryError('No revisions found for '+str(title)+'.')
+        self.first_edit_date = parse_date_string(self.revisions[0]['rev_timestamp'])
+        self.age = datetime.now() - self.first_edit_date
+        self.most_recent_edit_date = parse_date_string(self.revisions[-1]['rev_timestamp'])
+        self.most_recent_edit_age = datetime.now() - self.most_recent_edit_date
 
     def get_by_period(self, year, month=0):
         by_period = []
@@ -173,58 +167,7 @@ class ArticleHistory:
 @route('/revisions/<title>')
 def get_revisions(title):
     article = ArticleHistory(title)
-    stats = {'total_revisions':             article.get_revision_total(),
-            'minor_count':                  article.get_minor_count(),
-            'IP_edit_count':                article.get_anon_count(),
-            'first_edit':                   str(article.first_edit_date),
-            'most_recent_edit':             str(article.most_recent_edit_date),
-            'average_time_between_edits':   article.get_average_time_between_edits(),
-            'age':                          article.age.days,
-            'recent_edit_age':              article.most_recent_edit_age.days,
-            'editors_five_plus_edits':      len(article.get_some_editors(5)),
-            'top_20_percent':               article.get_top_percent_editors(),
-            'top_5_percent':                article.get_top_percent_editors(.05),
-            'total_editors':                article.get_editor_count(),
-            'average_length':               article.get_average_length(),
-            'reverts_estimate':             article.get_revert_estimate(),
-            'last_30_days_total_revisions': article.get_revision_total(article.get_since(30)),
-            'last_30_days_minor_count':     article.get_minor_count(article.get_since(30)),
-            'last_30_days_IP_edit_count':   article.get_anon_count(article.get_since(30)),
-            'last_30_days_average_time_between_edits': article.get_average_time_between_edits(article.get_since(30)),
-            'last_30_days_editors_five_plus_edits': len(article.get_some_editors(5, article.get_since(30))),
-            'last_30_days_top_20_percent':  article.get_top_percent_editors(.20, article.get_since(30)),
-            'last_30_days_top_5_percent':   article.get_top_percent_editors(.05, article.get_since(30)),
-            'last_30_days_total_editors':   article.get_editor_count(article.get_since(30)),
-            'last_30_days_average_length':  article.get_average_length(article.get_since(30)),
-            'last_30_days_reverts_estimate': article.get_revert_estimate(article.get_since(30)),
-            'last_500_total_revisions':     article.get_revision_total(article.revisions[:500]),
-            'last_500_minor_count':         article.get_minor_count(article.revisions[:500]),
-            'last_500_IP_edit_count':        article.get_anon_count(article.revisions[:500]),
-            'last_500_average_time_between_edits': article.get_average_time_between_edits(article.revisions[:500]),
-            'last_500_editors_five_plus_edits': len(article.get_some_editors(5, article.revisions[:500])),
-            'last_500_top_20_percent':      article.get_top_percent_editors(.20, article.revisions[:500]),
-            'last_500_top_5_percent':       article.get_top_percent_editors(.05, article.revisions[:500]),
-            'last_500_total_editors':       article.get_editor_count(article.revisions[:500]),
-            'last_500_average_length':      article.get_average_length(article.revisions[:500]),
-            'last_500_reverts_estimate':    article.get_revert_estimate(article.revisions[:500]),
-            'fetch_time':                   str(datetime.now()),
-            }
-    try:
-        talk = ArticleHistory(title, 1)
-        talk_stats = {'talk_revisions':     talk.get_revision_total(),
-            'talk_IP_edit_count':           talk.get_anon_count(),
-            'talk_age':                     talk.age.days,
-            'talk_total_editors':           talk.get_editor_count(),
-            'talk_editors_five_plus_edits': len(talk.get_some_editors(5)),
-            'talk_last_30_days_total_revisions': article.get_revision_total(talk.get_since(30)),
-            }
-    except HistoryError as he:
-        print he
-        talk_stats = {}
-
-    stats.update(talk_stats)
-
-    return stats
+    return { 'result': article.revisions }
 
 
 @route('/history/search/')
@@ -302,4 +245,4 @@ def get_history(title, language, project):
     return template('en', stats)
 
 if __name__ == '__main__':
-    run(host='0.0.0.0', port=8088, reloader=True, debug=True, server='twisted')
+    run(host='0.0.0.0', port=8089, reloader=True, debug=True)
