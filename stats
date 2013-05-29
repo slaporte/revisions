@@ -304,6 +304,10 @@ class ArticleHistory(object):
 
 def get_history(title):
     '''first, normalize article title'''
+    title = title.replace('%20', '_')
+    title = title.replace(' ', '_')
+    if not title[0].isupper():
+        title = title.capitalize()
     article = ArticleHistory(title)
     stats = article.get_stats()
     stats['title_norm']  = title.replace('_', ' ')
