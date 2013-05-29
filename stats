@@ -164,7 +164,7 @@ class ArticleHistory(object):
         if revisions is None:
             revisions = self.revisions
         if len(revisions) != 0:
-            return [int(rev['rev_len']) for rev in revisions]
+            return [int(rev['rev_len']) for rev in revisions if rev['rev_len']]
         return [0]
 
     def get_revert_estimate(self, revisions=None):
