@@ -8,7 +8,7 @@
     <meta name="author" content="">
 
     <!-- Le styles -->
-    <link href="http://toolserver.org/~slaporte/views/css/bootstrap.css" rel="stylesheet">
+    <link href="http://tools.wmflabs.org/revisionstats/static/css/bootstrap.css" rel="stylesheet">
     <style>
       body {
         padding-top: 60px; /* 60px to make the container go all the way to the bottom of the topbar */
@@ -69,5 +69,5 @@
     <!-- Le javascript
     ================================================== -->
     <!-- Placed at the end of the document so the pages load faster -->
-    <script src="http://toolserver.org/~slaporte/views/js/jquery.js"></script>
-    <script src="http://toolserver.org/~slaporte/views/js/bootstrap-dropdown.js"></script>
+    <script src="http://tools.wmflabs.org/revisionstats/static/js/jquery.js"></script>
+    <script src="http://tools.wmflabs.org/revisionstats/static/bootstrap-dropdown.js"></script>

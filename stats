@@ -1,6 +1,9 @@
 #!/data/project/revisionstats/revisionstats/bin/python
-# -*- coding: utf-8 -*-
+# -*- coding: utf-16 -*-
 from __future__ import unicode_literals
+import sys
+reload(sys)
+sys.setdefaultencoding('utf-8')
 from bottle import template
 from datetime import timedelta, datetime
 import os
@@ -254,6 +257,6 @@ if __name__ == '__main__':
     page_title = get_params.getfirst('title')
     print "Content-Type: text/html\r\n\r\n"
     if not page_title:
-        print index().encode('utf-8')
+        print index()
     else:
-        print get_history(page_title).encode('utf-8')
+        print get_history(page_title)
