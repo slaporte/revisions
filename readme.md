@@ -1,25 +1,20 @@
 Revision stats
-===
+==============
 
-This tool is intended to run on the [Wikimedia Toolserver](http://toolserver.org/). It computes statistics from the revision history of a page on Wikipedia:
+Live version available at: http://tools.wmflabs.org/revisionstats/cgi-bin/rev/stats
 
-* Total revisions
-* Total minor revisions
-* First edit date
-* Most recent edit date
-* Average time between edits
-* Age (time since the first revision)
-* Recent edit age
-* Count of editors with 5 or more edits on this article
-* Percent of edits from the top 20% editors on this page
-* Percent of edits from the top 5% of editors on this page
-* Total unique editors
-* Average revision length
-* Estimate of revert revisions (from the edit summery)
-* Some of the above, limited to the last 30 days
-* Some of the above, limited to the last 500 edits
+This is a tool that calculates some basic stats about a Wikipedia article's revisions, which runs on [Wikimedia Labs](https://wikitech.wikimedia.org/).
 
-Instructions
----
+ * Total revisions
+ * Recent edits
+ * Editor diversity
+ * List of top 50 contributors to an article
 
-Run `revision.py`. Bottle will listen on port `8088`.
+Requirements
+------------
+ * argparse==1.2.1
+ * bottle==0.11.6
+ * distribute==0.6.24
+ * oursql==0.9.3.1
+ * wsgiref==0.1.2
+

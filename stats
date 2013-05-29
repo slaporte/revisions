@@ -79,6 +79,12 @@ def num_stats(vals):
     }
 
 
+def avg_partition(nums, n):
+    division = len(nums) / float(n)
+    return [mean(nums[int(round(division * i)):int(round(division * (i + 1)))])
+            for i in xrange(n)]
+
+
 class ArticleHistory(object):
     '''article history object'''
     def __init__(self, title, namespace=0):
@@ -162,9 +168,12 @@ class ArticleHistory(object):
     def get_average_length(self, revisions=None):
         if revisions is None:
             revisions = self.revisions
+        ret = [0]
         if len(revisions) != 0:
-            return [int(rev['rev_len']) for rev in revisions if rev['rev_len']]
-        return [0]
+            ret = [int(rev['rev_len']) for rev in revisions if rev['rev_len']]
+        if len(ret) > 50:
+           ret = avg_partition(ret, 50)
+        return ret
 
     def get_revert_estimate(self, revisions=None):
         reverts = 0
