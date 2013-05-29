@@ -1,42 +1,42 @@
-from bottle import route, run, template, redirect, request
+#!/data/project/revisionstats/revisionstats/bin/python
+
+from bottle import template
 from datetime import timedelta, datetime
-from twisted.python import log
 import os
 import oursql
-#import jsonp_bottle
-import sys
-log.startLogging(sys.stdout)
+import cgitb
+import cgi
+cgitb.enable()
+
+# TODO: timestamp
+
+DB_PATH = os.path.expanduser("~/replica.my.cnf")
+
 
 def parse_date_string(stamp):
     return datetime.strptime(stamp, '%Y%m%d%H%M%S')
 
 
-class HistoryError(Exception):
-    pass
-
 class ArticleHistory:
     '''article history object'''
     def __init__(self, title, namespace=0):
         db = oursql.connect(db='enwiki_p',
-            host="enwiki-p.rrdb.toolserver.org",
-            read_default_file=os.path.expanduser("~/.my.cnf"),
-            charset=None,
-            use_unicode=False)
+                            host="enwiki.labsdb",
+                            read_default_file=DB_PATH,
+                            charset=None,
+                            use_unicode=False)
         cursor = db.cursor(oursql.DictCursor)
         cursor.execute('''
-            SELECT      revision.rev_user_text, revision.rev_timestamp, revision.rev_user, revision.rev_minor_edit, revision.rev_len, revision.rev_deleted, revision.rev_comment, page.page_id, page.page_title
+            SELECT      revision.*
             FROM        revision
             INNER JOIN  page ON revision.rev_page = page.page_id
             WHERE       page_title = ? AND page.page_namespace = ?;
             ''', (title, namespace))
         self.revisions = cursor.fetchall()
-        try:
-            self.first_edit_date = parse_date_string(self.revisions[0]['rev_timestamp'])
-            self.age = datetime.now() - self.first_edit_date
-            self.most_recent_edit_date = parse_date_string(self.revisions[-1]['rev_timestamp'])
-            self.most_recent_edit_age = datetime.now() - self.most_recent_edit_date
-        except IndexError:
-            raise HistoryError('No revisions found for '+str(title)+'.')
+        self.first_edit_date = parse_date_string(self.revisions[0]['rev_timestamp'])
+        self.age = datetime.now() - self.first_edit_date
+        self.most_recent_edit_date = parse_date_string(self.revisions[-1]['rev_timestamp'])
+        self.most_recent_edit_age = datetime.now() - self.most_recent_edit_date
 
     def get_by_period(self, year, month=0):
         by_period = []
@@ -60,7 +60,7 @@ class ArticleHistory:
 
     def get_average_time_between_edits(self, revisions=None):
         times = []
-        if revisions == None:
+        if revisions is None:
             revisions = self.revisions
         for rev in revisions:
             times.append(parse_date_string(rev['rev_timestamp']))
@@ -78,7 +78,7 @@ class ArticleHistory:
 
     def get_edits_per_day(self, revisions=None):
         times = []
-        if revisions == None:
+        if revisions is None:
             revisions = self.revisions
         for rev in revisions:
             times.append(parse_date_string(rev['rev_timestamp']))
@@ -94,15 +94,16 @@ class ArticleHistory:
             return 0
 
     def get_average_length(self, revisions=None):
-        if revisions == None:
+        if revisions is None:
             revisions = self.revisions
         if len(revisions) != 0:
-            return int(sum([rev['rev_len'] for rev in revisions]) / len(revisions))
+            return int(sum([rev['rev_len'] for rev in revisions
+                            if rev['rev_len']]) / len(revisions))
         return 0
 
     def get_revert_estimate(self, revisions=None):
         reverts = 0
-        if revisions == None:
+        if revisions is None:
             revisions = self.revisions
         for rev in revisions:
             if 'revert' in rev['rev_comment'].lower():
@@ -110,18 +111,18 @@ class ArticleHistory:
         return reverts
 
     def get_revision_total(self, revisions=None):
-        if revisions == None:
+        if revisions is None:
             revisions = self.revisions
         return len(revisions)
 
     def get_minor_count(self, revisions=None):
-        if revisions == None:
+        if revisions is None:
             revisions = self.revisions
         return int(sum([rev['rev_minor_edit'] for rev in revisions]))
 
     def get_anon_count(self, revisions=None):
         anon_count = 0
-        if revisions == None:
+        if revisions is None:
             revisions = self.revisions
         for rev in revisions:
             if rev['rev_user'] == 0:
@@ -130,7 +131,7 @@ class ArticleHistory:
 
     def get_editor_counts(self, revisions=None):
         authors = {}
-        if revisions == None:
+        if revisions is None:
             revisions = self.revisions
         for rev in revisions:
             user = rev['rev_user_text']
@@ -141,19 +142,19 @@ class ArticleHistory:
         return authors
 
     def get_some_editors(self, num, revisions=None):
-        if revisions == None:
+        if revisions is None:
             revisions = self.revisions
         authors = self.get_editor_counts(revisions)
         return dict([(a, c) for (a, c) in authors.items() if c > num])
 
     def get_top_editors(self, revisions=None):
-        if revisions == None:
+        if revisions is None:
             revisions = self.revisions
         authors = self.get_editor_counts(revisions)
         return sorted(authors.iteritems(), key=lambda (k, v): v, reverse=True)
 
     def get_top_percent_editors(self, top=.20, revisions=None):
-        if revisions == None:
+        if revisions is None:
             revisions = self.revisions
         editors = self.get_editor_counts(revisions)
         if(len(editors)) != 0:
@@ -165,102 +166,45 @@ class ArticleHistory:
             return 0
 
     def get_editor_count(self, revisions=None):
-        if revisions == None:
+        if revisions is None:
             revisions = self.revisions
         return len(self.get_editor_counts(revisions))
 
 
-@route('/revisions/<title>')
 def get_revisions(title):
     article = ArticleHistory(title)
-    stats = {'total_revisions':             article.get_revision_total(),
-            'minor_count':                  article.get_minor_count(),
-            'IP_edit_count':                article.get_anon_count(),
-            'first_edit':                   str(article.first_edit_date),
-            'most_recent_edit':             str(article.most_recent_edit_date),
-            'average_time_between_edits':   article.get_average_time_between_edits(),
-            'age':                          article.age.days,
-            'recent_edit_age':              article.most_recent_edit_age.days,
-            'editors_five_plus_edits':      len(article.get_some_editors(5)),
-            'top_20_percent':               article.get_top_percent_editors(),
-            'top_5_percent':                article.get_top_percent_editors(.05),
-            'total_editors':                article.get_editor_count(),
-            'average_length':               article.get_average_length(),
-            'reverts_estimate':             article.get_revert_estimate(),
-            'last_30_days_total_revisions': article.get_revision_total(article.get_since(30)),
-            'last_30_days_minor_count':     article.get_minor_count(article.get_since(30)),
-            'last_30_days_IP_edit_count':   article.get_anon_count(article.get_since(30)),
-            'last_30_days_average_time_between_edits': article.get_average_time_between_edits(article.get_since(30)),
-            'last_30_days_editors_five_plus_edits': len(article.get_some_editors(5, article.get_since(30))),
-            'last_30_days_top_20_percent':  article.get_top_percent_editors(.20, article.get_since(30)),
-            'last_30_days_top_5_percent':   article.get_top_percent_editors(.05, article.get_since(30)),
-            'last_30_days_total_editors':   article.get_editor_count(article.get_since(30)),
-            'last_30_days_average_length':  article.get_average_length(article.get_since(30)),
-            'last_30_days_reverts_estimate': article.get_revert_estimate(article.get_since(30)),
-            'last_500_total_revisions':     article.get_revision_total(article.revisions[:500]),
-            'last_500_minor_count':         article.get_minor_count(article.revisions[:500]),
-            'last_500_IP_edit_count':        article.get_anon_count(article.revisions[:500]),
-            'last_500_average_time_between_edits': article.get_average_time_between_edits(article.revisions[:500]),
-            'last_500_editors_five_plus_edits': len(article.get_some_editors(5, article.revisions[:500])),
-            'last_500_top_20_percent':      article.get_top_percent_editors(.20, article.revisions[:500]),
-            'last_500_top_5_percent':       article.get_top_percent_editors(.05, article.revisions[:500]),
-            'last_500_total_editors':       article.get_editor_count(article.revisions[:500]),
-            'last_500_average_length':      article.get_average_length(article.revisions[:500]),
-            'last_500_reverts_estimate':    article.get_revert_estimate(article.revisions[:500]),
-            'fetch_time':                   str(datetime.now()),
-            }
-    try:
-        talk = ArticleHistory(title, 1)
-        talk_stats = {'talk_revisions':     talk.get_revision_total(),
-            'talk_IP_edit_count':           talk.get_anon_count(),
-            'talk_age':                     talk.age.days,
-            'talk_total_editors':           talk.get_editor_count(),
-            'talk_editors_five_plus_edits': len(talk.get_some_editors(5)),
-            'talk_last_30_days_total_revisions': article.get_revision_total(talk.get_since(30)),
-            }
-    except HistoryError as he:
-        print he
-        talk_stats = {}
-
-    stats.update(talk_stats)
-
-    return stats
+    return {'result': article.revisions}
 
 
-@route('/history/search/')
-def search():
-    redirect('/history/en/wp/' + request.query.title)
-
-
-@route('/history/<language>/<project>/<title>')
-def get_history(title, language, project):
+def get_history(title, language='en', project='wp'):
     '''first, normalize article title'''
-    if title[0].isupper():
-        title = title.capitalize()
     title = title.replace('%20', '_')
     title = title.replace(' ', '_')
+    if not title[0].isupper():
+        title = title.capitalize()
     article = ArticleHistory(title)
+    print article
     stats = {'title':                       title,
-            'total_revisions':              article.get_revision_total(),
-            'minor_count':                  article.get_minor_count(),
-            'IP_edit_count':                article.get_anon_count(),
-            'first_edit':                   str(article.first_edit_date),
-            'most_recent_edit':             str(article.most_recent_edit_date),
-            'average_time_between_edits':   article.get_average_time_between_edits(),
-            'age':                          str(article.age),
-            'recent_edit_age':              str(article.most_recent_edit_age),
-            'editors_five_plus_edits':      len(article.get_some_editors(5)),
-            'total_editors':                article.get_editor_count(),
-            'average_length':               article.get_average_length(),
-            'reverts_estimate':             article.get_revert_estimate(),
-            'last_day':                     article.get_revision_total(article.get_since(1)),
-            'last_7_days':                  article.get_revision_total(article.get_since(7)),
-            'last_30_days':                 article.get_revision_total(article.get_since(30)),
-            'last_365_days':                article.get_revision_total(article.get_since(365)),
-            'top_5_percent':                article.get_top_percent_editors(.05),
-            'top_20_percent':                article.get_top_percent_editors(.20),
-            'top_50_percent':                article.get_top_percent_editors(.50)
-            }
+             'total_revisions':              article.get_revision_total(),
+             'minor_count':                  article.get_minor_count(),
+             'IP_edit_count':                article.get_anon_count(),
+             'first_edit':                   str(article.first_edit_date),
+             'most_recent_edit':             str(article.most_recent_edit_date),
+             'average_time_between_edits':   article.get_average_time_between_edits(),
+             'age':                          str(article.age),
+             'recent_edit_age':              str(article.most_recent_edit_age),
+             'editors_five_plus_edits':      len(article.get_some_editors(5)),
+             'total_editors':                article.get_editor_count(),
+             'average_length':               article.get_average_length(),
+             'reverts_estimate':             article.get_revert_estimate(),
+             'last_day':                     article.get_revision_total(article.get_since(1)),
+             'last_7_days':                  article.get_revision_total(article.get_since(7)),
+             'last_30_days':                 article.get_revision_total(article.get_since(30)),
+             'last_365_days':                article.get_revision_total(article.get_since(365)),
+             'top_5_percent':                article.get_top_percent_editors(.05),
+             'top_20_percent':                article.get_top_percent_editors(.20),
+             'top_50_percent':                article.get_top_percent_editors(.50)
+             }
     first_year = article.revisions[0]['rev_timestamp'][:4]
     first_month = article.revisions[0]['rev_timestamp'][4:6]
     last_year = article.revisions[-1]['rev_timestamp'][:4]
@@ -290,16 +234,18 @@ def get_history(title, language, project):
                                             'reverts_estimate':             article.get_revert_estimate(revs)}})'''
         y_revs = article.get_by_period(y)
         stats['by_year'].append({'range': str(y),
-                                'total_revisions':              article.get_revision_total(y_revs),
-                                            'minor_count':                  article.get_minor_count(y_revs),
-                                            'IP_edit_count':                article.get_anon_count(y_revs),
-                                            'average_time_between_edits':   article.get_average_time_between_edits(y_revs),
-                                            'editors_five_plus_edits':      len(article.get_some_editors(5, y_revs)),
-                                            'total_editors':                article.get_editor_count(y_revs),
-                                            'average_length':               article.get_average_length(y_revs),
-                                            'reverts_estimate':             article.get_revert_estimate(y_revs)})
+                                 'total_revisions':              article.get_revision_total(y_revs),
+                                 'minor_count':                  article.get_minor_count(y_revs),
+                                 'IP_edit_count':                article.get_anon_count(y_revs),
+                                 'average_time_between_edits':   article.get_average_time_between_edits(y_revs),
+                                 'editors_five_plus_edits':      len(article.get_some_editors(5, y_revs)),
+                                 'total_editors':                article.get_editor_count(y_revs),
+                                 'average_length':               article.get_average_length(y_revs),
+                                 'reverts_estimate':             article.get_revert_estimate(y_revs)})
     stats['top_editors'] = article.get_top_editors()[:50]
     return template('en', stats)
 
 if __name__ == '__main__':
-    run(host='0.0.0.0', port=8088, reloader=True, debug=True, server='twisted')
+    get_params = cgi.FieldStorage()
+    print "Content-Type: text/html\r\n\r\n"
+    print get_history(get_params.getfirst('title'))
