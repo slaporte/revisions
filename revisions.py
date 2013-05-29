@@ -106,7 +106,7 @@ class ArticleHistory:
         if revisions is None:
             revisions = self.revisions
         for rev in revisions:
-            if 'revert' in rev['rev_comment'].lower():
+            if rev['rev_comment'] and 'revert' in rev['rev_comment'].lower():
                 reverts += 1
         return reverts
 
@@ -183,8 +183,7 @@ def get_history(title, language='en', project='wp'):
     if not title[0].isupper():
         title = title.capitalize()
     article = ArticleHistory(title)
-    print article
-    stats = {'title':                       title,
+    stats = {'title':                        title,
              'total_revisions':              article.get_revision_total(),
              'minor_count':                  article.get_minor_count(),
              'IP_edit_count':                article.get_anon_count(),
@@ -245,7 +244,15 @@ def get_history(title, language='en', project='wp'):
     stats['top_editors'] = article.get_top_editors()[:50]
     return template('en', stats)
 
+
+def homepage():
+    return template('home')
+
 if __name__ == '__main__':
     get_params = cgi.FieldStorage()
+    page_title = get_params.getfirst('title')
     print "Content-Type: text/html\r\n\r\n"
-    print get_history(get_params.getfirst('title'))
+    if not page_title:
+        print homepage()
+    else:
+        print get_history(page_title)
