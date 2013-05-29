@@ -245,7 +245,7 @@ def get_history(title, language='en', project='wp'):
     return template('en', stats)
 
 
-def homepage():
+def index():
     return template('home')
 
 if __name__ == '__main__':
@@ -253,6 +253,6 @@ if __name__ == '__main__':
     page_title = get_params.getfirst('title')
     print "Content-Type: text/html\r\n\r\n"
     if not page_title:
-        print homepage()
+        print index()
     else:
         print get_history(page_title)
