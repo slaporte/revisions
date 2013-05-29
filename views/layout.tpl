@@ -70,4 +70,4 @@
     ================================================== -->
     <!-- Placed at the end of the document so the pages load faster -->
     <script src="http://tools.wmflabs.org/revisionstats/static/js/jquery.js"></script>
-    <script src="http://tools.wmflabs.org/revisionstats/static/bootstrap-dropdown.js"></script>
+    <script src="http://tools.wmflabs.org/revisionstats/static/js/bootstrap-dropdown.js"></script>
