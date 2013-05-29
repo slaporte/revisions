@@ -5,6 +5,7 @@ import sys
 reload(sys)
 sys.setdefaultencoding('utf-8')
 from bottle import template
+import json
 from datetime import timedelta, datetime
 import os
 import oursql
@@ -15,6 +16,7 @@ cgitb.enable()
 # TODO: timestamp
 
 DB_PATH = os.path.expanduser("~/replica.my.cnf")
+
 
 def parse_date_string(stamp):
     return datetime.strptime(stamp, '%Y%m%d%H%M%S')
@@ -258,13 +260,13 @@ class ArticleHistory(object):
             'first_edit':                   str(self.first_edit_date),
             'most_recent_edit':             str(self.most_recent_edit_date),
             'edit_interval_avg':            str(sum(edit_interval) / (len(edit_interval) + 0.0)),
-            'edit_interval_list':           edit_interval,
+            'edit_interval_list':           json.dumps(edit_interval),
             'age':                          str(self.age),
             'recent_edit_age':              str(self.most_recent_edit_age),
             'editors_five_plus_edits':      len(self.get_some_editors(5)),
             'total_editors':                self.get_editor_count(),
             'avg_length':                   str(sum(length) / (len(length) + 0.0)),
-            'length_list':                  length,
+            'length_list':                  json.dumps(length),
             'reverts_estimate':             self.get_revert_estimate(),
             'last_day':                     self.get_revision_total(self.get_since(1)),
             'last_7_days':                  self.get_revision_total(self.get_since(7)),
@@ -308,7 +310,7 @@ def get_history(title):
     article = ArticleHistory(title)
     stats = article.get_stats()
     stats['title_norm']  = title.replace('_', ' ')
-    stats['monthly']     = article.get_rev_stats()
+    stats['monthly']     = json.dumps(article.get_rev_stats())
     stats['top_editors'] = article.get_top_editors()[:50]
     return template('en', stats)
 
