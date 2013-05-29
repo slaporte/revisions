@@ -251,7 +251,7 @@ class ArticleHistory(object):
     def get_stats(self):
         edit_interval = self.get_average_time_between_edits()
         length = self.get_average_length()
-            stats = {'title':                       self.title,
+        stats = {'title':                       self.title,
             'total_revisions':              self.get_revision_total(),
             'minor_count':                  self.get_minor_count(),
             'IP_edit_count':                self.get_anon_count(),
