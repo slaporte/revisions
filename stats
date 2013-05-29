@@ -254,6 +254,6 @@ if __name__ == '__main__':
     page_title = get_params.getfirst('title')
     print "Content-Type: text/html\r\n\r\n"
     if not page_title:
-        print index()
+        print index().encode('utf-8')
     else:
-        print get_history(page_title)
+        print get_history(page_title).encode('utf-8')
