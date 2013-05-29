@@ -36,7 +36,7 @@
       }
     </style>
     <script src="http://tools.wmflabs.org/revisionstats/static/js/d3.js"></script>
-    <script src="http://tools.wmflabs.org/revisionstats/static/app.js"></script>
+    <script src="http://tools.wmflabs.org/revisionstats/static/js/app.js"></script>
     <!--<link href="http://toolserver.org/~slaporte/views/css/bootstrap-responsive.css" rel="stylesheet"> -->
 
     <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
