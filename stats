@@ -16,12 +16,68 @@ cgitb.enable()
 
 DB_PATH = os.path.expanduser("~/replica.my.cnf")
 
-
 def parse_date_string(stamp):
     return datetime.strptime(stamp, '%Y%m%d%H%M%S')
 
 
-class ArticleHistory:
+class HistoryError(Exception):
+    pass
+
+
+def mean(vals):
+    return sum(vals) / len(vals)
+
+
+def median(vals):
+    copy = sorted(vals)
+    size = len(vals)
+    if size % 2 == 1:
+        return copy[(size - 1) / 2]
+    else:
+        return (copy[size / 2 - 1] + copy[size / 2]) / 2
+
+
+def pow_diff(vals, power):
+    m = mean(vals)
+    return [(v - m) ** power for v in vals]
+
+
+def variance(vals):
+    return mean(pow_diff(vals, 2))
+
+
+def std_dev(vals):
+    return variance(vals) ** 0.5
+
+
+def rel_std_dev(vals):
+    return std_dev(vals) / mean(vals)
+
+
+def skewness(vals):
+    return (sum(pow_diff(vals, 3)) /
+            ((len(vals) - 1) * (std_dev(vals) ** 3)))
+
+
+def kurtosis(vals):
+    return (sum(pow_diff(vals, 4)) /
+            ((len(vals) - 1) * (std_dev(vals) ** 4)))
+
+
+def num_stats(vals):
+    return {
+        'mean':     mean(vals),
+        'median':   median(vals),
+        'variance': variance(vals),
+        'std_dev':  std_dev(vals),
+        'rel_std_dev':  rel_std_dev(vals),
+        'skewness': skewness(vals),
+        'kurtosis': kurtosis(vals),
+        'size': len(vals)
+    }
+
+
+class ArticleHistory(object):
     '''article history object'''
     def __init__(self, title, namespace=0):
         db = oursql.connect(db='enwiki_p',
@@ -31,16 +87,23 @@ class ArticleHistory:
                             use_unicode=False)
         cursor = db.cursor(oursql.DictCursor)
         cursor.execute('''
-            SELECT      revision.*
+            SELECT      revision.rev_user_text, revision.rev_timestamp, revision.rev_user,
+                        revision.rev_minor_edit, revision.rev_len, revision.rev_deleted,
+                            revision.rev_comment, page.page_id, page.page_title
             FROM        revision
             INNER JOIN  page ON revision.rev_page = page.page_id
             WHERE       page_title = ? AND page.page_namespace = ?;
             ''', (title, namespace))
         self.revisions = cursor.fetchall()
-        self.first_edit_date = parse_date_string(self.revisions[0]['rev_timestamp'])
-        self.age = datetime.now() - self.first_edit_date
-        self.most_recent_edit_date = parse_date_string(self.revisions[-1]['rev_timestamp'])
-        self.most_recent_edit_age = datetime.now() - self.most_recent_edit_date
+        self.time_2 = datetime.now()
+        try:
+            self.title = title
+            self.first_edit_date = parse_date_string(self.revisions[0]['rev_timestamp'])
+            self.age = datetime.now() - self.first_edit_date
+            self.most_recent_edit_date = parse_date_string(self.revisions[-1]['rev_timestamp'])
+            self.most_recent_edit_age = datetime.now() - self.most_recent_edit_date
+        except IndexError:
+            raise HistoryError('No revisions found for ' + str(title) + '.')
 
     def get_by_period(self, year, month=0):
         by_period = []
@@ -76,9 +139,9 @@ class ArticleHistory:
                 time_diffs.append(time - times[i - 1])
         if len(time_diffs) != 0:
             average = sum(time_diffs, timedelta(0)) / len(time_diffs)
-            return average.total_seconds()
+            return [d.total_seconds() for d in time_diffs]
         else:
-            return 0
+            return [0]
 
     def get_edits_per_day(self, revisions=None):
         times = []
@@ -93,7 +156,7 @@ class ArticleHistory:
             else:
                 time_diffs.append(time - times[i - 1])
         if len(time_diffs) != 0:
-            return str(sum(time_diffs, timedelta(0)) / len(time_diffs))
+            return num_stats(time_diffs)
         else:
             return 0
 
@@ -101,16 +164,15 @@ class ArticleHistory:
         if revisions is None:
             revisions = self.revisions
         if len(revisions) != 0:
-            return int(sum([rev['rev_len'] for rev in revisions
-                            if rev['rev_len']]) / len(revisions))
-        return 0
+            return [int(rev['rev_len']) for rev in revisions]
+        return [0]
 
     def get_revert_estimate(self, revisions=None):
         reverts = 0
         if revisions is None:
             revisions = self.revisions
         for rev in revisions:
-            if rev['rev_comment'] and 'revert' in rev['rev_comment'].lower():
+            if 'revert' in rev['rev_comment'].lower():
                 reverts += 1
         return reverts
 
@@ -139,10 +201,22 @@ class ArticleHistory:
             revisions = self.revisions
         for rev in revisions:
             user = rev['rev_user_text']
-            if user in authors:
+            try:
                 authors[user] += 1
-            else:
+            except KeyError:
                 authors[user] = 1
+        return authors
+
+    def get_editor_bytes(self, revisions=None):
+        authors = {}
+        if revisions is None:
+            revisions = self.revisions
+        for rev in revisions:
+            user = rev['rev_user_text']
+            try:
+                authors[user].append(rev['rev_len'])
+            except KeyError:
+                authors[user] = [rev['rev_len']]
         return authors
 
     def get_some_editors(self, num, revisions=None):
@@ -174,79 +248,109 @@ class ArticleHistory:
             revisions = self.revisions
         return len(self.get_editor_counts(revisions))
 
+    def get_stats(self):
+        edit_interval = self.get_average_time_between_edits()
+        length = self.get_average_length()
+            stats = {'title':                       self.title,
+            'total_revisions':              self.get_revision_total(),
+            'minor_count':                  self.get_minor_count(),
+            'IP_edit_count':                self.get_anon_count(),
+            'first_edit':                   str(self.first_edit_date),
+            'most_recent_edit':             str(self.most_recent_edit_date),
+            'edit_interval_avg':            str(sum(edit_interval) / (len(edit_interval) + 0.0)),
+            'edit_interval_list':           edit_interval,
+            'age':                          str(self.age),
+            'recent_edit_age':              str(self.most_recent_edit_age),
+            'editors_five_plus_edits':      len(self.get_some_editors(5)),
+            'total_editors':                self.get_editor_count(),
+            'avg_length':                   str(sum(length) / (len(length) + 0.0)),
+            'length_list':                  length,
+            'reverts_estimate':             self.get_revert_estimate(),
+            'last_day':                     self.get_revision_total(self.get_since(1)),
+            'last_7_days':                  self.get_revision_total(self.get_since(7)),
+            'last_30_days':                 self.get_revision_total(self.get_since(30)),
+            'last_365_days':                self.get_revision_total(self.get_since(365)),
+            'top_5_percent':                self.get_top_percent_editors(.05),
+            'top_20_percent':                self.get_top_percent_editors(.20),
+            'top_50_percent':                self.get_top_percent_editors(.50)
+            }
+        return stats
 
-def get_revisions(title):
-    article = ArticleHistory(title)
-    return {'result': article.revisions}
+    def get_rev_stats(self):
+        first_year = self.revisions[0]['rev_timestamp'][:4]
+        first_month = self.revisions[0]['rev_timestamp'][4:6]
+        last_year = self.revisions[-1]['rev_timestamp'][:4]
+        last_month = self.revisions[-1]['rev_timestamp'][4:6]
+
+        monthly = []
+        for y in range(int(first_year), int(last_year) + 1):
+            if y == int(first_year):
+                start_m = first_month
+            else:
+                start_m = 1
+            if y == int(last_year):
+                end_m = last_month
+            else:
+                end_m = 13
+            for m in range(int(start_m), int(end_m)):
+                revs = self.get_by_period(y, m)
+                label = str(y) + str(m).zfill(2) + str(1).zfill(2)
+                monthly.append({'date': label,
+                            'Total': self.get_revision_total(revs),
+                            'Minor': self.get_minor_count(revs),
+                            'IP': self.get_anon_count(revs),
+                            'Reverts (estimate)': self.get_revert_estimate(revs)})
+        return monthly
 
 
-def get_history(title, language='en', project='wp'):
+def get_history(title):
     '''first, normalize article title'''
-    title = title.replace('%20', '_')
-    title = title.replace(' ', '_')
+    article = ArticleHistory(title)
+    stats = article.get_stats()
+    stats['title_norm']  = title.replace('_', ' ')
+    stats['monthly']     = article.get_rev_stats()
+    stats['top_editors'] = article.get_top_editors()[:50]
+    return template('en', stats)
+
+
+def get_graph(title):
+    '''first, normalize article title'''
     if not title[0].isupper():
         title = title.capitalize()
+    title = title.replace('%20', '_')
+    title = title.replace(' ', '_')
     article = ArticleHistory(title)
-    stats = {'title':                        title,
-             'total_revisions':              article.get_revision_total(),
-             'minor_count':                  article.get_minor_count(),
-             'IP_edit_count':                article.get_anon_count(),
-             'first_edit':                   str(article.first_edit_date),
-             'most_recent_edit':             str(article.most_recent_edit_date),
-             'average_time_between_edits':   article.get_average_time_between_edits(),
-             'age':                          str(article.age),
-             'recent_edit_age':              str(article.most_recent_edit_age),
-             'editors_five_plus_edits':      len(article.get_some_editors(5)),
-             'total_editors':                article.get_editor_count(),
-             'average_length':               article.get_average_length(),
-             'reverts_estimate':             article.get_revert_estimate(),
-             'last_day':                     article.get_revision_total(article.get_since(1)),
-             'last_7_days':                  article.get_revision_total(article.get_since(7)),
-             'last_30_days':                 article.get_revision_total(article.get_since(30)),
-             'last_365_days':                article.get_revision_total(article.get_since(365)),
-             'top_5_percent':                article.get_top_percent_editors(.05),
-             'top_20_percent':                article.get_top_percent_editors(.20),
-             'top_50_percent':                article.get_top_percent_editors(.50)
-             }
-    first_year = article.revisions[0]['rev_timestamp'][:4]
-    first_month = article.revisions[0]['rev_timestamp'][4:6]
-    last_year = article.revisions[-1]['rev_timestamp'][:4]
-    last_month = article.revisions[-1]['rev_timestamp'][4:6]
+    stats = {}
+    stats['interval']    = []
+    stats['length']      = []
+    stats['editors']     = []
+    stats['first_year']  = article.revisions[0]['rev_timestamp'][:4]
+    stats['first_month'] = article.revisions[0]['rev_timestamp'][4:6]
+    stats['last_year']   = article.revisions[-1]['rev_timestamp'][:4]
+    stats['last_month']  = article.revisions[-1]['rev_timestamp'][4:6]
+
     stats['by_month'] = []
-    stats['by_year'] = []
-    for y in range(int(first_year), int(last_year) + 1):
-        '''if y == first_year:
-            start = first_month
+    for y in range(int(stats['first_year']), int(stats['last_year']) + 1):
+        if y == int(stats['first_year']):
+            start = stats['first_month']
         else:
             start = 1
-        if y == last_year:
-            end = last_month
+        if y == int(stats['last_year']):
+            end = stats['last_month']
         else:
             end = 13
         for m in range(int(start), int(end)):
             revs = article.get_by_period(y, m)
-            label = str(y) + '/' + str(m)
-            stats['by_month'].append({'range': label,
-                                 'values': {'total_revisions':              article.get_revision_total(revs),
-                                            'minor_count':                  article.get_minor_count(revs),
-                                            'IP_edit_count':                article.get_anon_count(revs),
-                                            'average_time_between_edits':   article.get_average_time_between_edits(revs),
-                                            'editors_five_plus_edits':      len(article.get_some_editors(5, revs)),
-                                            'total_editors':                article.get_editor_count(revs),
-                                            'average_length':               article.get_average_length(revs),
-                                            'reverts_estimate':             article.get_revert_estimate(revs)}})'''
-        y_revs = article.get_by_period(y)
-        stats['by_year'].append({'range': str(y),
-                                 'total_revisions':              article.get_revision_total(y_revs),
-                                 'minor_count':                  article.get_minor_count(y_revs),
-                                 'IP_edit_count':                article.get_anon_count(y_revs),
-                                 'average_time_between_edits':   article.get_average_time_between_edits(y_revs),
-                                 'editors_five_plus_edits':      len(article.get_some_editors(5, y_revs)),
-                                 'total_editors':                article.get_editor_count(y_revs),
-                                 'average_length':               article.get_average_length(y_revs),
-                                 'reverts_estimate':             article.get_revert_estimate(y_revs)})
-    stats['top_editors'] = article.get_top_editors()[:50]
-    return template('en', stats)
+            label = str(y) + str(m).zfill(2) + str(1).zfill(2)
+            stats['by_month'].append({'date': label,
+                        'Total': article.get_revision_total(revs),
+                        'Minor': article.get_minor_count(revs),
+                        'IP': article.get_anon_count(revs),
+                        'Reverts (estimate)': article.get_revert_estimate(revs)})
+            stats['interval'].append(article.get_average_time_between_edits(revs)['mean'])
+            stats['length'].append(article.get_average_length(revs)['mean'])
+            stats['editors'].append(article.get_editor_count(revs))
+    return template('graph', stats)
 
 
 def index():
