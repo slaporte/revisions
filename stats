@@ -1,5 +1,6 @@
 #!/data/project/revisionstats/revisionstats/bin/python
-
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 from bottle import template
 from datetime import timedelta, datetime
 import os
