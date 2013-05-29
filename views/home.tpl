@@ -3,6 +3,6 @@
       <h2>Search</h2>
       <form class="" method="get" action="http://tools.wmflabs.org/revisionstats/cgi-bin/rev/stats">
         <input type="text" class="search-query" placeholder="Article name" name="title">
-\      </form>
+      </form>
        <body>
 %rebase layout
