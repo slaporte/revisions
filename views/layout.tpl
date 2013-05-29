@@ -39,7 +39,7 @@
             <ul class="nav">
               <li><a href="https://github.com/slaporte/revisions">About</a></li>
             </ul>
-            <form class="navbar-search pull-left" method="get" action="http://tools.wmflabs.org/revisionstats/cgi-bin/revisions/">
+            <form class="navbar-search pull-left" method="get" action="http://tools.wmflabs.org/revisionstats/cgi-bin/rev/stats">
               <input type="text" class="search-query" placeholder="Article name" name="title">
             </form>
             <ul class="nav pull-right">
