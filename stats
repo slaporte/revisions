@@ -1,5 +1,5 @@
 #!/data/project/revisionstats/revisionstats/bin/python
-# -*- coding: utf-16 -*-
+# -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 import sys
 reload(sys)
