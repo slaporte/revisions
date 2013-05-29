@@ -172,7 +172,7 @@ class ArticleHistory(object):
         if revisions is None:
             revisions = self.revisions
         for rev in revisions:
-            if 'revert' in rev['rev_comment'].lower():
+            if rev['rev_comment'] and 'revert' in rev['rev_comment'].lower():
                 reverts += 1
         return reverts
 
