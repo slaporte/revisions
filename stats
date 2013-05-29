@@ -98,14 +98,11 @@ class ArticleHistory(object):
             ''', (title, namespace))
         self.revisions = cursor.fetchall()
         self.time_2 = datetime.now()
-        try:
-            self.title = title
-            self.first_edit_date = parse_date_string(self.revisions[0]['rev_timestamp'])
-            self.age = datetime.now() - self.first_edit_date
-            self.most_recent_edit_date = parse_date_string(self.revisions[-1]['rev_timestamp'])
-            self.most_recent_edit_age = datetime.now() - self.most_recent_edit_date
-        except IndexError:
-            raise HistoryError('No revisions found for ' + str(title) + '.')
+        self.title = title
+        self.first_edit_date = parse_date_string(self.revisions[0]['rev_timestamp'])
+        self.age = datetime.now() - self.first_edit_date
+        self.most_recent_edit_date = parse_date_string(self.revisions[-1]['rev_timestamp'])
+        self.most_recent_edit_age = datetime.now() - self.most_recent_edit_date
 
     def get_by_period(self, year, month=0):
         by_period = []
